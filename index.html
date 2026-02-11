@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>sh rt</title>
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: url("https://i.postimg.cc/52t49kPL/20260210-1935-Image-Generation-simple-compose-01kh3zhjg8e7v93m67dhvakg73.png") no-repeat center center / cover;
+  cursor: none;
+  font-family: "Roboto Condensed", sans-serif;
+}
+
+.game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.instruction {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  background-color: rgba(0,0,0,0.5);
+  color: white;
+  font-size: 28px;
+  padding: 10px 0;
+  z-index: 6;
+  user-select: none;
+}
+
+.scoreboard {
+  position: absolute;
+  top: 0;
+  right: 20px;
+  background-color: rgba(0,0,0,0.5);
+  color: white;
+  font-size: 22px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  text-shadow: 0 0 5px black;
+  z-index: 7;
+}
+
+.row {
+  position: absolute;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  z-index: 2; 
+}
+
+.row:nth-child(2) { top: 30%; }
+.row:nth-child(3) { top: 55%; }
+.row:nth-child(4) { top: 80%; }
+
+.target {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  transition: transform 0.2s ease;
+  z-index: 3;
+}
+
+.word {
+  position: absolute;
+  top: -30px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 26px;
+  text-shadow: 0 0 5px black;
+  user-select: none;
+  z-index: 4;
+}
+
+.crosshair {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 9;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: white;
+  font-size: 48px;
+  z-index: 10;
+}
+
+.overlay button {
+  margin-top: 20px;
+  font-size: 24px;
+  background: white;
+  color: black;
+  border: none;
+  padding: 10px 30px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+@keyframes glow {
+  0% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 10px gold); }
+  100% { opacity: 0; transform: scale(2); filter: drop-shadow(0 0 30px gold); }
+}
+.glow {
+  position: absolute;
+  pointer-events: none;
+  animation: glow 1.5s ease-out forwards;
+}
+
+@keyframes explode {
+  0% { transform: scale(1); opacity: 1; filter: brightness(1); }
+  50% { transform: scale(1.5) rotate(20deg); filter: brightness(2); }
+  100% { transform: scale(0) rotate(360deg); opacity: 0; }
+}
+.explode {
+  animation: explode 0.5s ease-out forwards;
+}
+
+canvas.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+canvas.trail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1; 
+}
+</style>
+</head>
+<body>
+<div class="game-container" id="game">
+  <div class="instruction">Marca las palabras que pertenecen al grupo Aseo Personal</div>
+  <div class="scoreboard" id="scoreboard">✅ 0 | ❌ 0</div>
+  <div class="overlay" id="overlay">
+    <div id="overlayText"></div>
+    <button id="restartBtn">¿Intentar de nuevo?</button>
+  </div>
+  <canvas class="confetti" id="confetti"></canvas>
+  <canvas class="trail" id="trail"></canvas>
+</div>
+
+<img src="https://i.postimg.cc/FFq4jgxh/Untitled-design-(7).png">
+
+<script>
+const game = document.getElementById('game');
+const overlay = document.getElementById('overlay');
+const overlayText = document.getElementById('overlayText');
+const restartBtn = document.getElementById('restartBtn');
+const scoreboard = document.getElementById('scoreboard');
+const crosshair = document.getElementById('crosshair');
+const confettiCanvas = document.getElementById('confetti');
+const ctx = confettiCanvas.getContext('2d');
+const trailCanvas = document.getElementById('trail');
+const tctx = trailCanvas.getContext('2d');
+
+confettiCanvas.width = trailCanvas.width = window.innerWidth;
+confettiCanvas.height = trailCanvas.height = window.innerHeight;
+
+(function() {
+  const mark = "cmFkaWF0ZWFjaGVy";
+  const check = mark.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
+})();
+
+let correctCount = 0;
+let wrongCount = 0;
+let gameOver = false;
+
+const correctWords = ["jabón","cepillo de dientes","champú","gel de baño","pasta de dientes","cepillo para el pelo","toalla","secador"];
+const wrongWords = ["sopa de arroz","té","pan con mantequilla y mermelada","cubiertos","pronto","solo","manos"];
+
+const correctImages = [
+  "https://i.postimg.cc/nc4j95G8/11.png",
+  "https://i.postimg.cc/bNxDSM9j/12.png",
+  "https://i.postimg.cc/Pqrwj4ZP/3.png"
+];
+
+const wrongImages = [
+  "https://i.postimg.cc/QxQ9KPJG/8.png",
+  "https://i.postimg.cc/tRVVp71T/9.png",
+  "https://i.postimg.cc/c4RgtjBL/10.png"
+];
+
+let mouse = {x: innerWidth/2, y: innerHeight/2};
+document.addEventListener('mousemove', e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  crosshair.style.left = e.clientX + 'px';
+  crosshair.style.top = e.clientY + 'px';
+});
+
+let particles = [];
+function createTrail() {
+  for (let i = 0; i < 3; i++) {
+    particles.push({
+      x: mouse.x + (Math.random() - 0.5) * 10,
+      y: mouse.y + (Math.random() - 0.5) * 10,
+      size: Math.random() * 4 + 2,
+      alpha: 1,
+      speedY: Math.random() * -1.5 - 0.5,
+      color: `hsl(${45 + Math.random() * 15}, 100%, ${45 + Math.random() * 20}%)`
+    });
+  }
+}
+function drawTrail() {
+  tctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+  particles.forEach((p, i) => {
+    tctx.beginPath();
+    tctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    tctx.fillStyle = `rgba(255, 215, 0, ${p.alpha})`;
+    tctx.shadowColor = p.color;
+    tctx.shadowBlur = 20;
+    tctx.fill();
+    p.y += p.speedY;
+    p.alpha -= 0.02;
+    if (p.alpha <= 0) particles.splice(i, 1);
+  });
+  createTrail();
+  requestAnimationFrame(drawTrail);
+}
+drawTrail();
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+const allTargets = [];
+
+function createRows() {
+  const allWords = shuffle([...correctWords, ...wrongWords]);
+  const rowCount = 3;
+  const perRow = Math.ceil(allWords.length / rowCount);
+
+  for (let r = 0; r < rowCount; r++) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.top = [30,55,80][r] + '%';
+
+    const rowWords = allWords.slice(r*perRow, (r+1)*perRow);
+
+    while(rowWords.length < 5){
+      rowWords.push("");
+    }
+
+    shuffle(rowWords);
+
+    for (let i = 0; i < 5; i++) {
+      const target = document.createElement('div');
+      target.className = 'target';
+
+      const img = document.createElement('img');
+      if (correctWords.includes(rowWords[i])) {
+        img.src = correctImages[i % correctImages.length];
+      } else {
+        img.src = wrongImages[i % wrongImages.length];
+      }
+      img.width = 100;
+      img.height = 100;
+
+      const word = document.createElement('div');
+      word.className = 'word';
+      word.textContent = rowWords[i];
+      target.dataset.correct = correctWords.includes(rowWords[i]);
+      target.dataset.direction = Math.random() > 0.5 ? 1 : -1;
+
+      target.appendChild(word);
+      target.appendChild(img);
+      row.appendChild(target);
+      allTargets.push(target);
+    }
+
+    game.appendChild(row);
+  }
+}
+
+createRows();
+
+function animateTargets() {
+  allTargets.forEach((t) => {
+    const speed = 0.6 + Math.random()*0.2;
+    const direction = parseInt(t.dataset.direction);
+    t.dataset.offset = 0;
+    t.dataset.dir = direction;
+    t.dataset.speed = speed;
+  });
+
+  function move() {
+    if (!gameOver) {
+      allTargets.forEach(t => {
+        let offset = parseFloat(t.dataset.offset);
+        let dir = parseFloat(t.dataset.dir);
+        const speed = parseFloat(t.dataset.speed);
+        offset += dir * speed;
+        if (Math.abs(offset) > 90) t.dataset.dir = -dir;
+        t.dataset.offset = offset;
+        t.style.transform = `translateX(${offset}px)`;
+      });
+    }
+    requestAnimationFrame(move);
+  }
+  move();
+}
+animateTargets();
+
+game.addEventListener('click', e => {
+  if (gameOver) return;
+  const rect = game.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.target');
+  if (!target) return;
+
+  const correct = target.dataset.correct === 'true';
+  target.classList.add('explode');
+
+  if (correct) {
+    correctCount++;
+    const glow = document.createElement('div');
+    glow.className = 'glow';
+    glow.style.left = x + 'px';
+    glow.style.top = y + 'px';
+    glow.innerHTML = '✨';
+    game.appendChild(glow);
+    setTimeout(() => glow.remove(), 1500);
+  } else {
+    wrongCount++;
+    const sparkle = document.createElement('div');
+    sparkle.className = 'sparkle';
+    sparkle.style.left = x + 'px';
+    sparkle.style.top = y + 'px';
+    sparkle.innerHTML = '💫';
+    game.appendChild(sparkle);
+    setTimeout(() => sparkle.remove(), 1000);
+  }
+
+  setTimeout(() => target.remove(), 500);
+  updateScore();
+  checkEnd();
+});
+
+function updateScore() {
+  scoreboard.textContent = `✅ ${correctCount} | ❌ ${wrongCount}`;
+}
+
+function checkEnd() {
+  if (wrongCount >= 3) {
+    endGame("Game Over");
+  } else if (correctCount >= correctWords.length) {
+    winGame();
+  }
+}
+
+function endGame(text) {
+  gameOver = true;
+  overlay.style.display = 'flex';
+  overlayText.textContent = text;
+}
+
+function winGame() {
+  gameOver = true;
+  overlay.style.display = 'flex';
+  overlayText.textContent = "Great Job!";
+  startConfetti();
+}
+
+restartBtn.addEventListener('click', () => location.reload());
+
+function startConfetti() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+  let pieces = [];
+  for (let i = 0; i < 150; i++) {
+    pieces.push({
+      x: Math.random() * confettiCanvas.width,
+      y: Math.random() * confettiCanvas.height - confettiCanvas.height,
+      w: 8,
+      h: 8,
+      color: `hsl(${Math.random() * 360},100%,50%)`,
+      speed: 2 + Math.random() * 3,
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    pieces.forEach(p => {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      p.y += p.speed;
+      if (p.y > confettiCanvas.height) p.y = -10;
+    });
+    if (gameOver) requestAnimationFrame(draw);
+  }
+  draw();
+}
+</script>
+</body>
+</html>
